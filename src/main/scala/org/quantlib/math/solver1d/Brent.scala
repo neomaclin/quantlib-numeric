@@ -14,9 +14,10 @@ final case class Brent(lowerBound: Double = 0.0,
                        lowerBoundEnforced: Boolean = false,
                        upperBoundEnforced: Boolean = false) extends SolverIDImPl {
 
-  private def sign(a: Double, b: Double) = if (b >= 0.0) Math.abs(a) else -Math.abs(a)
+  if (lowerBound>0.0)require(lowerBoundEnforced)
+  if (upperBound>0.0)require(upperBoundEnforced)
 
-  override def solveImpl(f: (Double) => Double,
+  override def solveImpl(f: Solver1D.StatFunction,
                          rootExternal: Double,
                          xMinExternal: Double, xMaxExternal: Double,
                          fxMinExternal: Double, fxMaxExternal: Double,
@@ -34,7 +35,7 @@ final case class Brent(lowerBound: Double = 0.0,
     var froot = f(rootLocal)
     var evaluationNumber = evalCount + 1
     var (p, q, r, s, xAcc1, xMid) = (0.0, 0.0, 0.0, 0.0, 0.0, 0.0)
-    if ((froot * xMinLocal) < 0) {
+    if ((froot * fxMinLocal) < 0) {
       xMaxLocal = xMinLocal
       fxMaxLocal = fxMinLocal
     } else {
@@ -47,7 +48,7 @@ final case class Brent(lowerBound: Double = 0.0,
     var e = d
     var loopingResult = 0.0
     var resultReached = false
-    while (!resultReached || evaluationNumber <= maxEvaluations) {
+    while (!resultReached && evaluationNumber <= maxEvaluations) {
       if ((froot > 0.0 && fxMaxLocal > 0.0) || (froot < 0.0 && fxMaxLocal < 0.0)) {
 
         // Rename xMin, root, xMax and adjust bounds
@@ -72,45 +73,45 @@ final case class Brent(lowerBound: Double = 0.0,
         evaluationNumber = evaluationNumber + 1
         loopingResult = rootLocal
         resultReached = true
-      }
-      if (Math.abs(e) >= xAcc1 && Math.abs(fxMinLocal) > Math.abs(froot)) {
+      } else {
+        if (Math.abs(e) >= xAcc1 && Math.abs(fxMinLocal) > Math.abs(froot)) {
 
-        // Attempt inverse quadratic interpolation
-        s = froot / fxMinLocal
-        if (xMinLocal =~ xMaxLocal) {
-          p = 2.0 * xMid * s
-          q = 1.0 - s
+          // Attempt inverse quadratic interpolation
+          s = froot / fxMinLocal
+          if (xMinLocal =~ xMaxLocal) {
+            p = 2.0 * xMid * s
+            q = 1.0 - s
+          } else {
+            q = fxMinLocal / fxMaxLocal
+            r = froot / fxMaxLocal
+            p = s * (2.0 * xMid * q * (q - r) - (rootLocal - xMinLocal) * (r - 1.0))
+            q = (q - 1.0) * (r - 1.0) * (s - 1.0)
+          }
+          if (p > 0.0) q = -q // Check whether in bounds
+          p = Math.abs(p)
+          val min1 = 3.0 * xMid * q - Math.abs(xAcc1 * q)
+          val min2 = Math.abs(e * q)
+          if (2.0 * p < (if (min1 < min2) min1 else min2)) {
+            e = d // Accept interpolation
+            d = p / q
+          } else {
+            d = xMid // Interpolation failed, use bisection
+            e = d
+          }
         } else {
-          q = fxMinLocal / fxMaxLocal
-          r = froot / fxMaxLocal
-          p = s * (2.0 * xMid * q * (q - r) - (rootLocal - xMinLocal) * (r - 1.0))
-          q = (q - 1.0) * (r - 1.0) * (s - 1.0)
-        }
-        if (p > 0.0) q = -q // Check whether in bounds
-        p = Math.abs(p)
-        val min1 = 3.0 * xMid * q - Math.abs(xAcc1 * q)
-        val min2 = Math.abs(e * q)
-        if (2.0 * p < (if (min1 < min2) min1 else min2)) {
-          e = d // Accept interpolation
-          d = p / q
-        } else {
-          d = xMid // Interpolation failed, use bisection
+          // Bounds decreasing too slowly, use bisection
+          d = xMid
           e = d
         }
-      } else {
-        // Bounds decreasing too slowly, use bisection
-        d = xMid
-        e = d
+        xMinLocal = rootLocal
+        fxMinLocal = froot
+        rootLocal = if (Math.abs(d) > xAcc1) rootLocal + d else rootLocal + Solver1D.sign(xAcc1, xMid)
+        froot = f(rootLocal)
+        evaluationNumber = evaluationNumber + 1
+
       }
-      xMinLocal = rootLocal
-      fxMinLocal = froot
-      rootLocal = if (Math.abs(d) > xAcc1) rootLocal + d else rootLocal + sign(xAcc1, xMid)
-      froot = f(rootLocal)
-      evaluationNumber = evaluationNumber + 1
-
-
     }
-    assert(evaluationNumber > maxEvaluations,
+    assert(evaluationNumber <= maxEvaluations,
       s"unable to bracket root in ${maxEvaluations} function evaluations " +
         s"(last bracket attempt: f[$xMinLocal , $xMaxLocal] -> [$fxMinLocal , $fxMaxLocal])")
 

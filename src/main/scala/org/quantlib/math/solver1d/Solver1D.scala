@@ -11,6 +11,20 @@ import org.quantlib.math.Comparing._
 
 object Solver1D {
 
+
+  type StatFunction = {
+
+    def apply(x: Double) : Double
+
+    def derivative(x: Double) : Double
+  }
+
+  def sign(a: Double, b: Double) = if (b >= 0.0) Math.abs(a) else -Math.abs(a)
+
+  //  implicit class StatOps(val function: F) extends AnyVal {
+//    def apply[F](x: Double): Double = implicitly[Stat[F]].apply(function,x)
+//    def derivative[D](x: Double): Double = implicitly[Stat[F]].apply(function,x)
+//  }
   trait SolverIDImPl {
     def maxEvaluations: Int
 
@@ -23,7 +37,7 @@ object Solver1D {
     def upperBoundEnforced: Boolean
 
    // def solve(f: (Double => Double), xAccuracy: Double): Double
-    def solveImpl(f: (Double) => Double,
+    def solveImpl(f: StatFunction,
       root: Double,
       xMin: Double, xMax: Double,
       fxMin: Double, fxMax: Double,
@@ -35,7 +49,7 @@ object Solver1D {
 
     private def check(accuracy: Double) = require(accuracy > 0.0, s"accuracy ($accuracy) must be positive")
 
-    def solve(f: (Double => Double), accuracy: Double, guess: Double, step: Double) = {
+    def solve(f: StatFunction, accuracy: Double, guess: Double, step: Double) = {
 
       var (xMin, xMax) = (0.0, 0.0)
       var (fxMin, fxMax) = (0.0, 0.0)
@@ -56,7 +70,7 @@ object Solver1D {
       var flipflop = -1
 
       root = guess
-      fxMin = f(root)
+      fxMax = f(root)
 
       // monotonically crescent bias, as in optionValue(volatility)
 
@@ -79,7 +93,7 @@ object Solver1D {
 
           var loopingResult = 0.0
           var resultReached = false
-          while (!resultReached || evaluationNumber <= impl.maxEvaluations) {
+          while (!resultReached && evaluationNumber <= impl.maxEvaluations) {
             if (fxMin * fxMax <= 0.0) {
               loopingResult =
                 if (fxMin =~ 0.0) {
@@ -118,7 +132,7 @@ object Solver1D {
             }
           }
 
-          assert(evaluationNumber > impl.maxEvaluations,
+          assert(evaluationNumber <= impl.maxEvaluations,
             s"unable to bracket root in ${impl.maxEvaluations} function evaluations " +
               s"(last bracket attempt: f[$xMin , $xMax] -> [$fxMin , $fxMax])")
 
@@ -129,7 +143,7 @@ object Solver1D {
       result
     }
 
-    def solve(f: (Double => Double),
+    def solve(f: StatFunction,
               accuracy: Double,
               guess: Double,
               min: Double,
@@ -161,7 +175,7 @@ object Solver1D {
           impl.solveImpl(f, guess,
             xMin, xMax,
             fxMin, fxMax,
-            0,
+            2,
             accuracyPromximation)
         }
       result
