@@ -33,6 +33,10 @@ sealed abstract class Rounding(roundingType: Rounding.Type) extends (Double => D
 
 object Rounding{
 
+  def apply(precision: Int = 0, digit: Int = 5): Rounding = {
+    ClosestRounding(precision, digit)
+  }
+
   final case class NoRounding(precision: Int = 0, digit: Int = 5) extends Rounding(No)
 
   final case class DownRounding(precision: Int, digit: Int = 5) extends Rounding(Down)
